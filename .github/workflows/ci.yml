@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  lint-test-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run flake8 linter
+        run: |
+          flake8 src tests
+
+      - name: Run pytest tests
+        run: |
+          pytest tests
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Docker image
+        run: |
+          docker build -t credit-risk-api .
+
+      - name: Run Docker container (detached)
+        run: |
+          docker run -d -p 8000:8000 --name test-container credit-risk-api
+
+      - name: Wait for container to be ready
+        run: |
+          sleep 10  # adjust if your app takes longer to start
+
+      - name: Test /predict endpoint with curl
+        run: |
+          curl -X POST "http://localhost:8000/predict" -H "Content-Type: application/json" -d '{"Amount":1000,"Value":1000,"CountryCode":"KE","ProductCategory":"Airtime","ChannelId":"web","PricingStrategy":"standard"}'
+
+      - name: Stop Docker container
+        run: |
+          docker stop test-container
+          docker rm test-container
